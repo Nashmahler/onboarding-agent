@@ -1,0 +1,24 @@
+{
+  "event": "offer.accepted",
+  "sent_at": "2026-11-23T15:04:00Z",
+  "data": {
+    "candidate": {
+      "id": "cand_1004",
+      "name": "Sam Okafor",
+      "email": "sam.okafor@juniperlabs.example"
+    },
+    "job": {
+      "title": "Data Analyst",
+      "department": "Engineering",
+      "location": "Remote (US)"
+    },
+    "hiring_manager": {
+      "name": "Eli Moss",
+      "email": "eli.moss@juniperlabs.example"
+    },
+    "offer": {
+      "accepted_at": "2026-11-23",
+      "start_date": "2026-11-30"
+    }
+  }
+}

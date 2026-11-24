@@ -1,0 +1,23 @@
+{
+  "event": "offer.accepted",
+  "sent_at": "2026-11-24T10:00:00Z",
+  "data": {
+    "candidate": {
+      "id": "cand_1005",
+      "name": "Jo Park",
+      "email": "jo.park@juniperlabs.example"
+    },
+    "job": {
+      "title": "Recruiter",
+      "department": "People",
+      "location": "Remote (US)"
+    },
+    "hiring_manager": {
+      "name": "Ana Ruiz",
+      "email": "ana.ruiz@juniperlabs.example"
+    },
+    "offer": {
+      "accepted_at": "2026-11-24"
+    }
+  }
+}

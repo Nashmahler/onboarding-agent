@@ -1,0 +1,24 @@
+{
+  "event": "offer.accepted",
+  "sent_at": "2026-11-18T15:04:00Z",
+  "data": {
+    "candidate": {
+      "id": "cand_1002",
+      "name": "Luis Ortega",
+      "email": "luis.ortega@juniperlabs.example"
+    },
+    "job": {
+      "title": "Account Executive",
+      "department": "Sales",
+      "location": "San Francisco"
+    },
+    "hiring_manager": {
+      "name": "Fay Lin",
+      "email": "fay.lin@juniperlabs.example"
+    },
+    "offer": {
+      "accepted_at": "2026-11-18",
+      "start_date": "2026-12-01"
+    }
+  }
+}

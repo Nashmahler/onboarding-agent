@@ -1,0 +1,24 @@
+{
+  "event": "offer.accepted",
+  "sent_at": "2026-11-20T15:04:00Z",
+  "data": {
+    "candidate": {
+      "id": "cand_1003",
+      "name": "Priya Nair",
+      "email": "priya.nair@juniperlabs.example"
+    },
+    "job": {
+      "title": "People Operations Partner",
+      "department": "People",
+      "location": "Remote (US)"
+    },
+    "hiring_manager": {
+      "name": "Ana Ruiz",
+      "email": "ana.ruiz@juniperlabs.example"
+    },
+    "offer": {
+      "accepted_at": "2026-11-20",
+      "start_date": "2026-12-14"
+    }
+  }
+}

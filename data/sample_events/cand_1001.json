@@ -1,0 +1,24 @@
+{
+  "event": "offer.accepted",
+  "sent_at": "2026-11-16T15:04:00Z",
+  "data": {
+    "candidate": {
+      "id": "cand_1001",
+      "name": "Maya Chen",
+      "email": "maya.chen@juniperlabs.example"
+    },
+    "job": {
+      "title": "Software Engineer",
+      "department": "Engineering",
+      "location": "Remote (US)"
+    },
+    "hiring_manager": {
+      "name": "Eli Moss",
+      "email": "eli.moss@juniperlabs.example"
+    },
+    "offer": {
+      "accepted_at": "2026-11-16",
+      "start_date": "2026-12-07"
+    }
+  }
+}

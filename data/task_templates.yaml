@@ -1,0 +1,19 @@
+# Onboarding tasks for every new hire. offset_days is relative to the start date (negative = before day one).
+# Tasks under a department are added on top of the "all" list.
+all:
+  - {task: Send offer paperwork and I-9 link, owner_role: People Ops, offset_days: -10}
+  - {task: Add to payroll, owner_role: Payroll, offset_days: -7}
+  - {task: Order and ship laptop, owner_role: IT, offset_days: -7}
+  - {task: Create email and Slack accounts, owner_role: IT, offset_days: -2}
+  - {task: Send first-week plan, owner_role: Manager, offset_days: -2}
+  - {task: Security training, owner_role: New hire, offset_days: 5}
+  - {task: Benefits enrollment, owner_role: New hire, offset_days: 10}
+  - {task: 30-day check-in, owner_role: Manager, offset_days: 30}
+Engineering:
+  - {task: Grant GitHub and cloud access, owner_role: IT, offset_days: -1}
+  - {task: Assign onboarding buddy, owner_role: Manager, offset_days: -3}
+Sales:
+  - {task: Create CRM seat, owner_role: IT, offset_days: -1}
+  - {task: Schedule product training, owner_role: Manager, offset_days: 3}
+People:
+  - {task: Grant HRIS admin access, owner_role: IT, offset_days: -1}
