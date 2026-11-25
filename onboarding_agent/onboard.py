@@ -17,10 +17,15 @@ class Result:
 
 
 def due_date(start_date: str, offset_days: int) -> str:
-    """Start date + offset. A Saturday or Sunday moves to the next Monday."""
+    """Start date + offset, kept off weekends (Monday is 0, Saturday 5, Sunday 6).
+    Before day one (negative offset): back to the previous Friday, so it still
+    happens before the hire starts. Otherwise: forward to the next Monday."""
     day = date.fromisoformat(start_date) + timedelta(days=offset_days)
-    if day.weekday() >= 5:  # Monday is 0, so Saturday is 5 and Sunday is 6
-        day += timedelta(days=7 - day.weekday())  # Saturday +2, Sunday +1
+    if day.weekday() >= 5:
+        if offset_days < 0:
+            day -= timedelta(days=day.weekday() - 4)  # Saturday -1, Sunday -2
+        else:
+            day += timedelta(days=7 - day.weekday())  # Saturday +2, Sunday +1
     return day.isoformat()
 
 

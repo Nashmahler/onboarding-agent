@@ -56,9 +56,24 @@ def test_sunday_moves_to_next_monday():
     assert due_date("2026-12-07", 6) == "2026-12-14"  # Dec 13 is a Sunday
 
 
-def test_weekend_before_start_also_moves_forward():
-    assert due_date("2026-12-07", -2) == "2026-12-07"  # Saturday Dec 5 -> Monday Dec 7
-    assert due_date("2026-12-07", -1) == "2026-12-07"  # Sunday Dec 6 -> Monday Dec 7
+def test_weekend_before_start_moves_back_to_friday():
+    assert due_date("2026-12-07", -2) == "2026-12-04"  # Saturday Dec 5 -> Friday Dec 4
+    assert due_date("2026-12-07", -1) == "2026-12-04"  # Sunday Dec 6 -> Friday Dec 4
+
+
+def test_pre_start_tasks_are_never_due_after_day_one():
+    for start in ["2026-12-01", "2026-12-07", "2026-12-14", "2026-11-30"]:
+        for offset in range(-14, 0):
+            assert due_date(start, offset) < start
+
+
+def test_due_dates_never_land_on_a_weekend():
+    for offset in range(-14, 31):
+        assert date.fromisoformat(due_date("2026-12-07", offset)).weekday() < 5
+
+
+def test_zero_offset_on_a_weekend_start_moves_forward():
+    assert due_date("2026-12-05", 0) == "2026-12-07"  # a Saturday start -> Monday
 
 
 def test_negative_offset_on_a_weekday():
@@ -98,12 +113,12 @@ def test_maya_due_dates(conn):
         "Send offer paperwork and I-9 link": "2026-11-27",
         "Add to payroll": "2026-11-30",
         "Order and ship laptop": "2026-11-30",
-        "Create email and Slack accounts": "2026-12-07",  # Sat -> Mon
-        "Send first-week plan": "2026-12-07",             # Sat -> Mon
+        "Create email and Slack accounts": "2026-12-04",  # Sat -> Fri
+        "Send first-week plan": "2026-12-04",             # Sat -> Fri
         "Security training": "2026-12-14",                # Sat -> Mon
         "Benefits enrollment": "2026-12-17",
         "30-day check-in": "2027-01-06",
-        "Grant GitHub and cloud access": "2026-12-07",    # Sun -> Mon
+        "Grant GitHub and cloud access": "2026-12-04",    # Sun -> Fri
         "Assign onboarding buddy": "2026-12-04",
     }
 

@@ -30,3 +30,6 @@
 - [ ] Metrics in SQL: days from offer accepted to all day-one tasks done, overdue tasks by owner
 - [ ] README with a diagram, the rules above, how to run it, and what I'd build next
 - [ ] Record what broke and how I fixed it (for Friday's post)
+
+## Known gaps
+- **Changed start dates are ignored.** If an "offer accepted" event is replayed for the same candidate with a different start date, the existing employee row and task due dates are kept as they were (the inserts use `ON CONFLICT DO NOTHING`). A changed start date needs its own handling, such as updating the employee and recomputing the due dates of tasks that aren't done yet. Not built yet.
