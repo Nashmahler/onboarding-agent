@@ -33,6 +33,15 @@ def test_unknown_department_still_gets_the_eight_tasks_and_a_warning(caplog):
     assert "Finance" in caplog.text
 
 
+@pytest.mark.parametrize("written", ["engineering", "ENGINEERING", "  Engineering  ", "Engineering\t"])
+def test_department_matching_ignores_case_and_spaces(written, caplog):
+    with caplog.at_level(logging.WARNING):
+        tasks = tasks_for(written)
+    assert names(tasks) == names(tasks_for("Engineering"))
+    assert len(tasks) == 10
+    assert caplog.text == ""
+
+
 def test_known_department_logs_no_warning(caplog):
     with caplog.at_level(logging.WARNING):
         tasks_for("Sales")
