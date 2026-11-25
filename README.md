@@ -19,6 +19,16 @@ python -m pytest
 python -m onboarding_agent load data/sample_events
 ```
 
+### Draft, approve, send
+
+```bash
+python -m onboarding_agent draft cand_1001
+python -m onboarding_agent approve 1 --by "Eli Moss"
+python -m onboarding_agent send 1
+```
+
+`draft` writes a first-week plan and saves it as `pending`; nothing is sent. Only `approve` (by a named person) lets `send` deliver it, and `send` refuses anything that is pending, rejected or already sent. The plan comes from one Claude call using the key in `ONBOARDING_API_KEY` (set it in a local `.env` or your shell; never commit it). Without a key, a clearly labeled sample plan is saved instead. Tests never call the real API. Delivery prints to the console until Slack is added.
+
 `load` reads every offer-accepted event in the folder, adds the new hire, and creates their onboarding tasks in a local SQLite file (`onboarding.db`, or pick one with `--db`). Running it again creates no duplicates. It prints one line per event, writes each result to `runs_log`, and exits with code 1 if any event failed (the sample folder includes one bad event on purpose).
 
 ## Status

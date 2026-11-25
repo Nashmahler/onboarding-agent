@@ -14,11 +14,11 @@
 - [x] Tests: correct tasks per department, correct due dates, no duplicates
 
 ## Session 2 (~1.5h): the AI step, with approval
-- [ ] One Claude call drafts a short first-week plan for the new hire from their role and team
-- [ ] The draft is saved as `pending` in the `approvals` table; nothing is sent yet
-- [ ] A simple command lets the manager approve or reject it (`python -m onboarding_agent approve <id>`)
-- [ ] Only approved drafts can be sent; this is checked in code
-- [ ] Tests: an unapproved draft can never be sent
+- [x] One Claude call drafts a short first-week plan for the new hire from their role and team
+- [x] The draft is saved as `pending` in the `approvals` table; nothing is sent yet
+- [x] A simple command lets the manager approve or reject it (`python -m onboarding_agent approve <id>`)
+- [x] Only approved drafts can be sent; this is checked in code
+- [x] Tests: an unapproved draft can never be sent
 
 ## Session 3 (~1.5h): Slack and the overdue report
 - [ ] Post the welcome and the approved plan to Slack (a free Slack workspace and an incoming webhook), or print to the console if no webhook is set
