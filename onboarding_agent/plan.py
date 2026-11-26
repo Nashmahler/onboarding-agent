@@ -13,6 +13,7 @@ from .onboard import log_run
 KIND = "first_week_plan"
 MODEL = "claude-haiku-5-5"
 KEY_VAR = "ONBOARDING_API_KEY"  # not ANTHROPIC_API_KEY; passed to the client explicitly
+MAX_TOKENS = 2000  # room for the whole reply; a cut-off reply is treated as a failure
 MAX_CALLS_PER_HIRE = 3  # CLAUDE.md rule: at most 3 Claude calls per new hire
 WINDOW_DAYS = 14  # how far past day one the checklist reaches
 SAMPLE_LABEL = f"[SAMPLE PLAN: {KEY_VAR} is not set, so Claude was not called]"
@@ -88,9 +89,11 @@ def build_prompt(employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:
 def _ask_claude(client, employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:
     response = client.messages.create(
         model=MODEL,
-        max_tokens=500,
+        max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": build_prompt(employee, tasks)}],
     )
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise PlanError(f"reply was cut off at {MAX_TOKENS} tokens, so it is not saved")
     text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text").strip()
     if not text:
         raise PlanError("Claude returned no text")

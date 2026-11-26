@@ -15,7 +15,8 @@ SAMPLES = Path(__file__).resolve().parent.parent / "data" / "sample_events"
 class FakeClient:
     """Stands in for the Anthropic client. Counts calls; never touches the network."""
 
-    def __init__(self, text="Welcome to the team, Maya! Looking forward to week one.", error=None):
+    def __init__(self, text="Welcome to the team, Maya! Looking forward to week one.", error=None, stop_reason="end_turn"):
+        self.stop_reason = stop_reason
         self.calls = []
         self.error = error
         self.messages = SimpleNamespace(create=self._create)
@@ -25,7 +26,9 @@ class FakeClient:
         self.calls.append(kwargs)
         if self.error:
             raise self.error
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self._text)])
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=self._text)], stop_reason=self.stop_reason
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -188,3 +191,14 @@ def test_rerunning_with_a_live_draft_costs_no_call(conn):
     draft_plan(conn, "cand_1001", client=client)
     draft_plan(conn, "cand_1001", client=client)
     assert calls_logged(conn, "cand_1001") == 1
+
+
+def test_cut_off_reply_is_a_failure_saves_nothing_and_still_counts(conn):
+    client = FakeClient(text="Hi Maya, we're excited", stop_reason="max_tokens")
+    with pytest.raises(PlanError, match="cut off"):
+        draft_plan(conn, "cand_1001", client=client)
+    assert conn.execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 0  # no approval row
+    log = conn.execute("SELECT status, detail FROM runs_log WHERE step = 'draft cand_1001'").fetchone()
+    assert log["status"] == "failed" and "cut off" in log["detail"]
+    assert calls_logged(conn, "cand_1001") == 1  # the call still used a slot
+    assert client.calls[0]["max_tokens"] == 2000
