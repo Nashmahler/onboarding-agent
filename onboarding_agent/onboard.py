@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from . import slack
 from .events import EventError, NewHire, parse_event
 from .templates import TemplateError, has_department, tasks_for
 
@@ -61,13 +62,19 @@ def create_tasks(conn: sqlite3.Connection, employee_id: int, hire: NewHire) -> i
 
 
 def log_run(conn: sqlite3.Connection, step: str, status: str, detail: str) -> None:
-    """Write one row to runs_log. ran_at is set here in code, in UTC."""
+    """Write one row to runs_log (ran_at is set here in code, in UTC).
+
+    A 'failed' row also raises a Slack alert. It lives here, not at each call site, so no
+    failed step can be logged without alerting. The row is written first: even if the
+    alert can't be delivered, the failure is on record."""
     ran_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with conn:
         conn.execute(
             "INSERT INTO runs_log (ran_at, step, status, detail) VALUES (?, ?, ?, ?)",
             (ran_at, step, status, detail),
         )
+    if status == "failed":
+        slack.alert(conn, step, detail)
 
 
 def _describe(hire: NewHire, created: int) -> str:

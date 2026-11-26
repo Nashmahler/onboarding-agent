@@ -14,3 +14,4 @@ Read BUILD_PLAN.md first; it's the source of truth for scope. Public portfolio p
 ## Git commits
 - Always commit as the author Nash Mahler <mahler.nash@gmail.com>.
 - Never set the commit author to Claude or noreply@anthropic.com, and don't add Claude attribution lines.
+- Exception: the GitHub Actions workflows commit data/demo/onboarding_demo.db as github-actions[bot] <41898583+github-actions[bot]@users.noreply.github.com>. These rules cover my own work, not automated runs.

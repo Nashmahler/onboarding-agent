@@ -60,7 +60,7 @@ def test_draft_approve_send_flow(tmp_path, monkeypatch, capsys):
     assert main(["approve", "1", "--by", "Eli Moss", "--db", str(db)]) == 0
     assert main(["send", "1", "--db", str(db)]) == 0
     out = capsys.readouterr().out
-    assert "To: Maya Chen" in out
+    assert "Welcome to Juniper Labs, Maya Chen" in out  # no webhook: printed to the console
     row = query(db, "SELECT status, decided_by FROM approvals")[0]
     assert (row[0], row[1]) == ("sent", "Eli Moss")
 

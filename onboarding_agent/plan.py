@@ -7,6 +7,7 @@ import os
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
+from . import slack
 from .approvals import create_draft
 from .onboard import log_run
 
@@ -101,6 +102,15 @@ def _ask_claude(client, employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:
     return text
 
 
+def _announce_pending(conn: sqlite3.Connection, approval_id: int, employee: sqlite3.Row, draft: str) -> None:
+    """Post "pending approval" with the approval id. A Slack problem is logged (and alerted),
+    but never loses the draft: it is already saved."""
+    try:
+        slack.post(slack.pending_message(approval_id, employee, draft))
+    except slack.SlackError as exc:
+        log_run(conn, f"notify pending approval {approval_id}", "failed", str(exc))
+
+
 def draft_plan(conn: sqlite3.Connection, candidate_id: str, client=None) -> int:
     """Draft and save a pending first-week plan. Return the approval id.
 
@@ -134,6 +144,7 @@ def draft_plan(conn: sqlite3.Connection, candidate_id: str, client=None) -> int:
         draft = f"{SAMPLE_LABEL}\n\nHi {employee['name'].split()[0]}, welcome to the team!\n\n{checklist}"
         approval_id = create_draft(conn, employee["id"], KIND, draft)
         log_run(conn, step, "skipped", f"no {KEY_VAR}; sample plan saved as pending approval {approval_id}")
+        _announce_pending(conn, approval_id, employee, draft)
         return approval_id
 
     # The cap is enforced here, in code, before any client is built.
@@ -148,6 +159,8 @@ def draft_plan(conn: sqlite3.Connection, candidate_id: str, client=None) -> int:
         log_run(conn, step, "failed", f"Claude call failed: {exc}")
         raise PlanError(f"Claude call failed: {exc}") from exc
 
-    approval_id = create_draft(conn, employee["id"], KIND, f"{prose}\n\n{checklist}")
+    draft = f"{prose}\n\n{checklist}"
+    approval_id = create_draft(conn, employee["id"], KIND, draft)
     log_run(conn, step, "ok", f"draft saved as pending approval {approval_id}")
+    _announce_pending(conn, approval_id, employee, draft)
     return approval_id

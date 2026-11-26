@@ -21,10 +21,10 @@
 - [x] Tests: an unapproved draft can never be sent
 
 ## Session 3 (~1.5h): Slack and the overdue report
-- [ ] Post the welcome and the approved plan to Slack (a free Slack workspace and an incoming webhook), or print to the console if no webhook is set
-- [ ] Overdue report in SQL: open tasks past their due date, grouped by owner (this is drill 6 from the SQL practice)
-- [ ] Every run writes a row to `runs_log`; a failed step posts an alert instead of stopping silently
-- [ ] Tests: overdue math, failure alert
+- [x] Post the welcome and the approved plan to Slack (a free Slack workspace and an incoming webhook), or print to the console if no webhook is set
+- [x] Overdue report in SQL: open tasks past their due date, grouped by owner (this is drill 6 from the SQL practice)
+- [x] Every run writes a row to `runs_log`; a failed step posts an alert instead of stopping silently
+- [x] Tests: overdue math, failure alert
 
 ## Session 4 (~1.5h): measure it and ship it
 - [ ] Metrics in SQL: days from offer accepted to all day-one tasks done, overdue tasks by owner
