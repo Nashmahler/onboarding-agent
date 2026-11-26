@@ -135,3 +135,54 @@ def test_refused_send_is_logged(conn, sent):
         "SELECT status, detail FROM runs_log WHERE step = ?", (f"send approval {approval_id}",)
     ).fetchone()
     assert row["status"] == "failed" and "pending" in row["detail"]
+
+
+# --- Database trigger: raw SQL, bypassing the Python gate entirely ---
+import sqlite3
+
+
+def raw_set(conn, approval_id, new_status):
+    with conn:
+        conn.execute("UPDATE approvals SET status = ? WHERE id = ?", (new_status, approval_id))
+
+
+def test_trigger_blocks_pending_to_sent(conn):
+    approval_id = new_draft(conn)
+    with pytest.raises(sqlite3.IntegrityError, match="only an approved draft can be sent"):
+        raw_set(conn, approval_id, "sent")
+    assert status(conn, approval_id) == "pending"
+
+
+def test_trigger_blocks_rejected_to_sent(conn):
+    approval_id = new_draft(conn)
+    reject(conn, approval_id, "Eli Moss")
+    with pytest.raises(sqlite3.IntegrityError):
+        raw_set(conn, approval_id, "sent")
+    assert status(conn, approval_id) == "rejected"
+
+
+def test_trigger_allows_approved_to_sent(conn):
+    approval_id = new_draft(conn)
+    approve(conn, approval_id, "Eli Moss")
+    raw_set(conn, approval_id, "sent")
+    assert status(conn, approval_id) == "sent"
+
+
+def test_trigger_blocks_inserting_a_row_already_sent(conn):
+    employee_id = conn.execute("SELECT id FROM employees").fetchone()["id"]
+    with pytest.raises(sqlite3.IntegrityError, match="cannot start as sent"):
+        with conn:
+            conn.execute(
+                "INSERT INTO approvals (employee_id, kind, draft, status) VALUES (?, 'x', 'y', 'sent')",
+                (employee_id,),
+            )
+    assert conn.execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 0
+
+
+def test_init_db_adds_triggers_to_an_older_database():
+    c = connect(":memory:")
+    init_db(c)
+    c.execute("DROP TRIGGER approvals_only_approved_can_be_sent")  # simulate a pre-trigger file
+    init_db(c)
+    names = {r["name"] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
+    assert "approvals_only_approved_can_be_sent" in names
