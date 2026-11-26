@@ -119,3 +119,72 @@ def test_real_key_is_passed_explicitly(conn, monkeypatch):
     monkeypatch.setenv(plan.KEY_VAR, "test-key-not-real")
     draft_plan(conn, "cand_1001")
     assert seen["key"] == "test-key-not-real" and len(client.calls) == 1
+
+
+# --- Redraft after rejection, and the cap of 3 Claude calls per hire ---
+from onboarding_agent.approvals import reject
+from onboarding_agent.plan import CallLimitError, MAX_CALLS_PER_HIRE
+
+
+def calls_logged(conn, candidate_id):
+    return conn.execute(
+        "SELECT COUNT(*) FROM runs_log WHERE step = ?", (f"claude call {candidate_id}",)
+    ).fetchone()[0]
+
+
+def test_new_draft_allowed_after_rejection(conn):
+    client = FakeClient()
+    first = draft_plan(conn, "cand_1001", client=client)
+    reject(conn, first, "Eli Moss")
+    second = draft_plan(conn, "cand_1001", client=client)
+    assert second != first
+    assert get_approval(conn, second)["status"] == "pending"
+    assert len(client.calls) == 2
+
+
+def test_fourth_call_is_refused(conn):
+    client = FakeClient()
+    for _ in range(MAX_CALLS_PER_HIRE):
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+    with pytest.raises(CallLimitError):
+        draft_plan(conn, "cand_1001", client=client)
+    assert len(client.calls) == 3  # the 4th never reached Claude
+    assert conn.execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 3
+    assert calls_logged(conn, "cand_1001") == 3
+    log = conn.execute("SELECT status, detail FROM runs_log WHERE step = 'draft cand_1001' ORDER BY id DESC").fetchone()
+    assert log["status"] == "failed" and "3 Claude calls" in log["detail"]
+
+
+def test_limit_refusal_never_builds_a_real_client(conn, monkeypatch):
+    client = FakeClient()
+    for _ in range(3):
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+    monkeypatch.setenv(plan.KEY_VAR, "test-key-not-real")  # a key is set, but the cap still wins
+    with pytest.raises(CallLimitError):  # autouse fixture would raise AssertionError if a client were built
+        draft_plan(conn, "cand_1001")
+
+
+def test_cap_is_per_hire(conn):
+    process_event(conn, SAMPLES / "cand_1002.json")
+    client = FakeClient()
+    for _ in range(3):
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+    other = draft_plan(conn, "cand_1002", client=client)  # a different hire is unaffected
+    assert get_approval(conn, other)["status"] == "pending"
+    assert calls_logged(conn, "cand_1002") == 1
+
+
+def test_failed_calls_still_use_a_slot(conn):
+    broken = FakeClient(error=RuntimeError("network down"))
+    for _ in range(3):
+        with pytest.raises(PlanError):
+            draft_plan(conn, "cand_1001", client=broken)
+    with pytest.raises(CallLimitError):
+        draft_plan(conn, "cand_1001", client=FakeClient())
+
+
+def test_rerunning_with_a_live_draft_costs_no_call(conn):
+    client = FakeClient()
+    draft_plan(conn, "cand_1001", client=client)
+    draft_plan(conn, "cand_1001", client=client)
+    assert calls_logged(conn, "cand_1001") == 1

@@ -5,7 +5,7 @@ and the dated checklist is appended by code, never written by the model.
 """
 import os
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .approvals import create_draft
 from .onboard import log_run
@@ -13,12 +13,34 @@ from .onboard import log_run
 KIND = "first_week_plan"
 MODEL = "claude-haiku-5-5"
 KEY_VAR = "ONBOARDING_API_KEY"  # not ANTHROPIC_API_KEY; passed to the client explicitly
+MAX_CALLS_PER_HIRE = 3  # CLAUDE.md rule: at most 3 Claude calls per new hire
 WINDOW_DAYS = 14  # how far past day one the checklist reaches
 SAMPLE_LABEL = f"[SAMPLE PLAN: {KEY_VAR} is not set, so Claude was not called]"
 
 
 class PlanError(Exception):
     """The plan could not be drafted."""
+
+
+class CallLimitError(PlanError):
+    """This hire has already used all their Claude calls."""
+
+
+def _reserve_call(conn: sqlite3.Connection, candidate_id: str) -> bool:
+    """Count this hire's calls in runs_log and take one slot, in ONE statement.
+
+    The INSERT only happens if fewer than MAX_CALLS_PER_HIRE rows exist, so the
+    check and the write can't be split by a second run. A call that later fails
+    still keeps its slot: it may have cost money, so retries can't run away."""
+    step = f"claude call {candidate_id}"
+    with conn:
+        cursor = conn.execute(
+            """INSERT INTO runs_log (ran_at, step, status, detail)
+               SELECT ?, ?, 'ok', 'call reserved'
+               WHERE (SELECT COUNT(*) FROM runs_log WHERE step = ?) < ?""",
+            (datetime.now(timezone.utc).isoformat(timespec="seconds"), step, step, MAX_CALLS_PER_HIRE),
+        )
+    return cursor.rowcount == 1
 
 
 def _make_client(api_key: str):
@@ -89,10 +111,12 @@ def draft_plan(conn: sqlite3.Connection, candidate_id: str, client=None) -> int:
         log_run(conn, step, "failed", f"unknown candidate {candidate_id}")
         raise PlanError(f"unknown candidate {candidate_id}")
 
-    # One plan per hire. This check comes BEFORE the Claude call, so re-running
-    # `draft` can never spend a second call (the cap is 3 per hire).
+    # One live plan per hire: a pending, approved or sent plan is returned as is. Only
+    # after a rejection can a new draft be made. This check comes BEFORE the Claude
+    # call, so re-running `draft` never spends a call.
     existing = conn.execute(
-        "SELECT id FROM approvals WHERE employee_id = ? AND kind = ?", (employee["id"], KIND)
+        "SELECT id FROM approvals WHERE employee_id = ? AND kind = ? AND status != 'rejected'",
+        (employee["id"], KIND),
     ).fetchone()
     if existing:
         log_run(conn, step, "skipped", f"approval {existing['id']} already exists")
@@ -107,6 +131,12 @@ def draft_plan(conn: sqlite3.Connection, candidate_id: str, client=None) -> int:
         approval_id = create_draft(conn, employee["id"], KIND, draft)
         log_run(conn, step, "skipped", f"no {KEY_VAR}; sample plan saved as pending approval {approval_id}")
         return approval_id
+
+    # The cap is enforced here, in code, before any client is built.
+    if not _reserve_call(conn, candidate_id):
+        message = f"{candidate_id} has used all {MAX_CALLS_PER_HIRE} Claude calls; no new draft"
+        log_run(conn, step, "failed", message)
+        raise CallLimitError(message)
 
     try:
         prose = _ask_claude(client or _make_client(api_key), employee, tasks)
