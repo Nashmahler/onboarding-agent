@@ -81,8 +81,9 @@ def build_prompt(employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:
         f"Team: {employee['department']}\nLocation: {employee['location']}\n"
         f"Manager: {employee['manager_name']}\n"
         f"Things already scheduled this week:\n{task_names}\n\n"
-        "Rules: do not write any dates, weekdays or numbers of days; a checklist with the "
-        "real dates is added separately. Do not invent meetings, names or tools."
+        "Rules: do not write any dates, weekdays or numbers of days; the checklist "
+        "with the real dates appears right below your message, so you can point to it "
+        "(for example, \"the checklist below\"). Do not invent meetings, names or tools."
     )
 
 

@@ -1,14 +1,15 @@
 Hi Maya,
 
-Welcome to Juniper Labs! I'm so glad you're joining the Engineering team. Here's a simple outline for your first week so you can settle in without feeling rushed.
+Welcome to Juniper Labs! I'm really glad to have you on the Engineering team, and I want your first week to feel calm and clear.
 
-The main items already on your calendar are security training and benefits enrollment. Please treat those as your priorities and take your time with them. Beyond that, there's no need to hit the ground running. Get comfortable with your setup, read through any team materials that interest you, and jot down questions as they come up. No question is too small.
+Two things are already on the calendar: security training and benefits enrollment. There's nothing you need to arrange for either. Take your time with them, and reach out if anything is unclear.
 
-Your checklist with the specific dates will arrive separately. Keep it handy, and reach out to me anytime if something is unclear or you need a hand.
+For everything else, the checklist below covers your setup steps and what to tackle when. Work through it at your own pace. Nobody expects you to ship anything yet. This week is about getting oriented and getting comfortable.
 
-We're really happy to have you here.
+Ask me anything, big or small. I'd much rather you ask than wonder.
 
-Warmly,
+Looking forward to working with you,
+
 Eli Moss
 
 Your checklist for the first two weeks:

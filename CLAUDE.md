@@ -8,6 +8,7 @@ Read BUILD_PLAN.md first; it's the source of truth for scope. Public portfolio p
 - Dates, counts, and "overdue" are computed in code (Python or SQL), never by the model.
 - Every run is logged (what happened, what failed). A failed step alerts someone instead of failing silently.
 - At most 3 Claude calls per new hire.
+- Before any command that needs approval, say in one plain sentence what it does and whether it changes, deletes, or sends anything outside this machine.
 - Nash builds this himself with Claude Code. Explain choices as you go; don't silently write large pieces he hasn't seen.
 
 ## Git commits
