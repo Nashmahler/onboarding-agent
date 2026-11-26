@@ -23,7 +23,7 @@ python -m onboarding_agent load data/sample_events
 
 ```bash
 python -m onboarding_agent draft cand_1001
-python -m onboarding_agent approve 1 --by "Eli Moss"
+python -m onboarding_agent approve 1 --by "Eli Moss"      # or: reject 1 --by "Eli Moss" --reason "..."
 python -m onboarding_agent send 1
 ```
 
@@ -44,6 +44,7 @@ What gets posted:
 | A draft is saved | "Plan pending approval #N" with the hire, manager and the draft, labeled as not yet sent |
 | `send` / `approve --send` on an approved draft | "Welcome to Juniper Labs, <name>" with the approved plan and the approver's name |
 | Any step is logged as `failed` | "Step failed: <step>" with the reason. The `runs_log` row is written first |
+| `reject` | "Plan #N rejected by NAME: REASON" |
 | `overdue --post` | The overdue report |
 
 If an alert itself can't be delivered, that is printed and written to `runs_log` as a failed `slack alert` row, never dropped.
@@ -64,7 +65,8 @@ Add two repo secrets (Settings > Secrets and variables > Actions): `ONBOARDING_A
 
 1. **Run onboarding**: loads `data/sample_events` and drafts a plan per hire (each posts "pending approval" to Slack). `cand_1005` is the planted failure: it is missing a start date, so it logs a failed row and posts an alert. The run is green when every failure was logged and alerted; it goes red only for something unexpected (a crash, or an alert that could not be delivered).
 2. **Approve**: inputs are the approval id (from the Slack message) and your name. It approves and sends the welcome to Slack. The name is typed by whoever clicks, so the real control is who has write access to the repo.
-3. **Overdue report**: posts the report to Slack.
+3. **Reject**: inputs are the approval id, your name and a reason. It rejects a pending draft, saves the reason, and posts "Plan #N rejected by NAME: REASON" to Slack. The next **Run onboarding** drafts a fresh plan for that hire (still within the 3-Claude-calls-per-hire cap; a 4th draft is refused, logged and alerted).
+4. **Overdue report**: posts the report to Slack.
 
 **Where the database lives between runs:** a runner starts empty every time, so the SQLite file is committed to the repo at `data/demo/onboarding_demo.db`. Each workflow saves it back to `main` as `github-actions[bot]`, and the next run starts from it. Everything in it is fictional. The three buttons share one concurrency group so two runs can't overwrite each other. If an approved plan fails to send (for example Slack is down), it stays `approved`; run `python -m onboarding_agent send <id>` against the pulled database to retry.
 

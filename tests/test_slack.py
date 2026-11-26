@@ -176,3 +176,89 @@ def test_run_command_fails_on_an_unexpected_crash(tmp_path, monkeypatch):
     assert main(["run", str(SAMPLES), "--db", str(db)]) == 1
     detail = connect(str(db)).execute("SELECT detail FROM runs_log WHERE step = 'run onboarding'").fetchone()[0]
     assert "ZeroDivisionError" in detail
+
+
+# --- Reject: reason saved, posted to Slack, redraft stays within the cap ---
+from onboarding_agent.approvals import ApprovalError, reject  # noqa: E402
+
+
+def test_reject_saves_the_reason_and_posts_to_slack(conn, slack_on):
+    approval_id = create_draft(conn, 1, "first_week_plan", "plan")
+    reject(conn, approval_id, "Eli Moss", "Sign-off is wrong")
+    row = conn.execute("SELECT status, decided_by, reason FROM approvals").fetchone()
+    assert tuple(row) == ("rejected", "Eli Moss", "Sign-off is wrong")
+    assert slack_on.sent == [f":x: Plan #{approval_id} rejected by Eli Moss: Sign-off is wrong"]
+
+
+def test_reject_needs_a_reason_and_a_pending_draft(conn, slack_on):
+    approval_id = create_draft(conn, 1, "first_week_plan", "plan")
+    with pytest.raises(ApprovalError, match="reason"):
+        reject(conn, approval_id, "Eli Moss", "  ")
+    assert conn.execute("SELECT status FROM approvals").fetchone()[0] == "pending"
+    approve(conn, approval_id, "Eli Moss")
+    with pytest.raises(ApprovalError):  # an approved draft can't be rejected afterwards
+        reject(conn, approval_id, "Eli Moss", "changed my mind")
+    assert not any("rejected by" in m for m in slack_on.sent)
+
+
+def test_a_slack_outage_does_not_undo_a_rejection(conn, monkeypatch):
+    approval_id = create_draft(conn, 1, "first_week_plan", "plan")
+    monkeypatch.setenv(slack.WEBHOOK_VAR, FAKE_URL)
+    monkeypatch.setattr(slack.requests, "post", Recorder(status=500))
+    reject(conn, approval_id, "Eli Moss", "no")
+    assert conn.execute("SELECT status FROM approvals").fetchone()[0] == "rejected"
+    assert conn.execute("SELECT COUNT(*) FROM runs_log WHERE step = ?", (f"notify rejection {approval_id}",)).fetchone()[0] == 1
+
+
+def test_cli_reject_requires_a_reason(tmp_path, capsys):
+    db = tmp_path / "t.db"
+    with pytest.raises(SystemExit):
+        main(["reject", "1", "--by", "Eli Moss", "--db", str(db)])
+
+
+def test_an_old_database_gets_the_reason_column(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE approvals (id INTEGER PRIMARY KEY, employee_id INTEGER, kind TEXT, draft TEXT, status TEXT DEFAULT 'pending', decided_by TEXT, decided_at TEXT)")
+    old.commit(); old.close()
+    c = connect(str(path)); init_db(c); init_db(c)  # twice: the migration is safe to repeat
+    assert "reason" in [r["name"] for r in c.execute("PRAGMA table_info(approvals)")]
+
+
+class FakeClaude:
+    def __init__(self):
+        self.calls = 0
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        self.calls += 1
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text="Hi! Eli Moss")], stop_reason="end_turn")
+
+
+def test_run_onboarding_redrafts_a_rejected_hire_within_the_cap(tmp_path, slack_on, monkeypatch):
+    fake = FakeClaude()
+    monkeypatch.setenv("ONBOARDING_API_KEY", "not-a-real-key")
+    monkeypatch.setattr("onboarding_agent.plan._make_client", lambda key: fake)
+    db = tmp_path / "t.db"
+    folder = tmp_path / "events"
+    folder.mkdir()
+    shutil.copy(SAMPLES / "cand_1001.json", folder)
+
+    assert main(["run", str(folder), "--db", str(db)]) == 0
+    assert fake.calls == 1
+    assert main(["run", str(folder), "--db", str(db)]) == 0  # live plan exists: no new call
+    assert fake.calls == 1
+
+    for round_number in (2, 3):  # reject, run again: a new draft each time, one call each
+        reject(connect(str(db)), round_number - 1, "Eli Moss", "not right")
+        assert main(["run", str(folder), "--db", str(db)]) == 0
+        assert fake.calls == round_number
+    statuses = [r[0] for r in connect(str(db)).execute("SELECT status FROM approvals ORDER BY id")]
+    assert statuses == ["rejected", "rejected", "pending"]
+
+    reject(connect(str(db)), 3, "Eli Moss", "still not right")  # the 4th draft would need a 4th call
+    assert main(["run", str(folder), "--db", str(db)]) == 0  # refused, but logged and alerted, so the run is green
+    assert fake.calls == 3
+    assert connect(str(db)).execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 3
+    assert any("used all 3 Claude calls" in m and "Step failed" in m for m in slack_on.sent)

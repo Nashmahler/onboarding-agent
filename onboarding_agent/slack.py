@@ -66,9 +66,13 @@ def pending_message(approval_id: int, employee: sqlite3.Row, draft: str) -> str:
         f":hourglass_flowing_sand: *Plan pending approval #{approval_id}* for "
         f"{escape(employee['name'])} ({escape(employee['title'])}), manager {escape(employee['manager_name'])}.\n"
         f"Nothing has been sent to the new hire. To release it, run the *Approve* workflow "
-        f"with approval id *{approval_id}* and your name.\n"
+        f"with approval id *{approval_id}* and your name; to turn it down, run *Reject* with a reason.\n"
         f"--- DRAFT ---\n{escape(draft)}"
     )
+
+
+def rejected_message(approval_id: int, by: str, reason: str) -> str:
+    return f":x: Plan #{approval_id} rejected by {escape(by)}: {escape(reason)}"
 
 
 def welcome_message(approval: sqlite3.Row, employee: sqlite3.Row) -> str:

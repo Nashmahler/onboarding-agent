@@ -9,6 +9,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+from . import slack
 from .onboard import log_run
 
 
@@ -45,7 +46,7 @@ def get_approval(conn: sqlite3.Connection, approval_id: int) -> sqlite3.Row:
     return row
 
 
-def _decide(conn: sqlite3.Connection, approval_id: int, new_status: str, by: str) -> None:
+def _decide(conn: sqlite3.Connection, approval_id: int, new_status: str, by: str, reason: str | None = None) -> None:
     by = (by or "").strip()
     if not by:
         raise ApprovalError("a name is required to approve or reject (use --by)")
@@ -54,9 +55,9 @@ def _decide(conn: sqlite3.Connection, approval_id: int, new_status: str, by: str
         # Only a pending draft can be decided. The status check is part of the UPDATE,
         # so a rejected or sent draft can never be flipped back to approved.
         cursor = conn.execute(
-            """UPDATE approvals SET status = ?, decided_by = ?, decided_at = ?
+            """UPDATE approvals SET status = ?, decided_by = ?, decided_at = ?, reason = ?
                WHERE id = ? AND status = 'pending'""",
-            (new_status, by, _now(), approval_id),
+            (new_status, by, _now(), reason, approval_id),
         )
     if cursor.rowcount == 0:
         current = get_approval(conn, approval_id)["status"]  # raises if the id is unknown
@@ -70,8 +71,16 @@ def approve(conn: sqlite3.Connection, approval_id: int, by: str) -> None:
     _decide(conn, approval_id, "approved", by)
 
 
-def reject(conn: sqlite3.Connection, approval_id: int, by: str) -> None:
-    _decide(conn, approval_id, "rejected", by)
+def reject(conn: sqlite3.Connection, approval_id: int, by: str, reason: str) -> None:
+    """Reject a pending draft. A reason is required: the next drafter and the team can see why."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ApprovalError("a reason is required to reject (use --reason)")
+    _decide(conn, approval_id, "rejected", by, reason)
+    try:  # the rejection already stands; a Slack problem is logged and alerted, not fatal
+        slack.post(slack.rejected_message(approval_id, by.strip(), reason))
+    except slack.SlackError as exc:
+        log_run(conn, f"notify rejection {approval_id}", "failed", str(exc))
 
 
 def send_approved(conn: sqlite3.Connection, approval_id: int, sender: Sender) -> None:

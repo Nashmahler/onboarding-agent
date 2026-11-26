@@ -18,3 +18,8 @@ def connect(path: str = "onboarding.db") -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     """Create the tables from schema.sql. Safe to run more than once."""
     conn.executescript(SCHEMA_PATH.read_text())
+    # An older database file (like the committed demo one) has no approvals.reason yet.
+    columns = [row["name"] for row in conn.execute("PRAGMA table_info(approvals)")]
+    if "reason" not in columns:
+        with conn:
+            conn.execute("ALTER TABLE approvals ADD COLUMN reason TEXT")

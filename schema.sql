@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS approvals (
   draft TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'sent')),
   decided_by TEXT,
-  decided_at TEXT
+  decided_at TEXT,
+  reason TEXT                          -- why a draft was rejected
 );
 
 CREATE TABLE IF NOT EXISTS runs_log (

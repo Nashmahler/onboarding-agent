@@ -1,0 +1,70 @@
+name: Reject
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval_id:
+        description: "Approval id from the Slack 'pending approval' message (a number)"
+        required: true
+      approver:
+        description: "Your name, recorded as the person who rejected it"
+        required: true
+      reason:
+        description: "Why the plan is rejected (saved, and posted to Slack)"
+        required: true
+
+# Write access is only needed to commit the demo database.
+permissions:
+  contents: write
+
+# One button at a time, so two runs can never overwrite each other's database.
+concurrency:
+  group: demo-database
+  cancel-in-progress: false
+
+env:
+  DB: data/demo/onboarding_demo.db
+
+jobs:
+  reject:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the latest main, not the commit that was main when the button was clicked:
+      # a queued run must see the database the previous run just saved.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      # Inputs go in through environment variables, never pasted into the command text,
+      # so a crafted name can't run commands.
+      - name: Reject the draft
+        env:
+          APPROVAL_ID: ${{ inputs.approval_id }}
+          APPROVER: ${{ inputs.approver }}
+          REASON: ${{ inputs.reason }}
+          ONBOARDING_SLACK_WEBHOOK: ${{ secrets.ONBOARDING_SLACK_WEBHOOK }}
+        run: |
+          if ! [[ "$APPROVAL_ID" =~ ^[0-9]+$ ]]; then echo "approval id must be a number"; exit 1; fi
+          python -m onboarding_agent reject "$APPROVAL_ID" --by "$APPROVER" --reason "$REASON" --db "$DB"
+
+      # Save the database back to the repo so the next button sees the same data.
+      # `if: always()` so a failed run's log rows and approvals are kept too.
+      - name: Save the demo database
+        if: always()
+        env:
+          COMMIT_MESSAGE: "demo db: reject ${{ inputs.approval_id }}"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898583+github-actions[bot]@users.noreply.github.com"
+          git add data/demo/onboarding_demo.db
+          if git diff --cached --quiet; then echo "database unchanged"; exit 0; fi
+          git commit -m "$COMMIT_MESSAGE"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 3
+          done
+          echo "could not push the database"; exit 1

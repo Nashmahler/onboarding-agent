@@ -138,7 +138,7 @@ def calls_logged(conn, candidate_id):
 def test_new_draft_allowed_after_rejection(conn):
     client = FakeClient()
     first = draft_plan(conn, "cand_1001", client=client)
-    reject(conn, first, "Eli Moss")
+    reject(conn, first, "Eli Moss", "needs changes")
     second = draft_plan(conn, "cand_1001", client=client)
     assert second != first
     assert get_approval(conn, second)["status"] == "pending"
@@ -148,7 +148,7 @@ def test_new_draft_allowed_after_rejection(conn):
 def test_fourth_call_is_refused(conn):
     client = FakeClient()
     for _ in range(MAX_CALLS_PER_HIRE):
-        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss", "needs changes")
     with pytest.raises(CallLimitError):
         draft_plan(conn, "cand_1001", client=client)
     assert len(client.calls) == 3  # the 4th never reached Claude
@@ -161,7 +161,7 @@ def test_fourth_call_is_refused(conn):
 def test_limit_refusal_never_builds_a_real_client(conn, monkeypatch):
     client = FakeClient()
     for _ in range(3):
-        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss", "needs changes")
     monkeypatch.setenv(plan.KEY_VAR, "test-key-not-real")  # a key is set, but the cap still wins
     with pytest.raises(CallLimitError):  # autouse fixture would raise AssertionError if a client were built
         draft_plan(conn, "cand_1001")
@@ -171,7 +171,7 @@ def test_cap_is_per_hire(conn):
     process_event(conn, SAMPLES / "cand_1002.json")
     client = FakeClient()
     for _ in range(3):
-        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss")
+        reject(conn, draft_plan(conn, "cand_1001", client=client), "Eli Moss", "needs changes")
     other = draft_plan(conn, "cand_1002", client=client)  # a different hire is unaffected
     assert get_approval(conn, other)["status"] == "pending"
     assert calls_logged(conn, "cand_1002") == 1
@@ -202,3 +202,9 @@ def test_cut_off_reply_is_a_failure_saves_nothing_and_still_counts(conn):
     assert log["status"] == "failed" and "cut off" in log["detail"]
     assert calls_logged(conn, "cand_1001") == 1  # the call still used a slot
     assert client.calls[0]["max_tokens"] == 2000
+
+
+def test_prompt_tells_the_model_to_sign_off_with_the_name_only(conn):
+    employee = conn.execute("SELECT * FROM employees WHERE candidate_id = 'cand_1001'").fetchone()
+    prompt = plan.build_prompt(employee, [])
+    assert "Sign off with the manager's name only. Don't add job titles, meetings, tools, or anything else not listed above." in prompt

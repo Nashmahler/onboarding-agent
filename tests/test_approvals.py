@@ -57,7 +57,7 @@ def test_pending_draft_cannot_be_sent(conn, sent):
 def test_rejected_draft_cannot_be_sent(conn, sent):
     calls, sender = sent
     approval_id = new_draft(conn)
-    reject(conn, approval_id, "Eli Moss")
+    reject(conn, approval_id, "Eli Moss", "needs changes")
     with pytest.raises(NotApprovedError):
         send_approved(conn, approval_id, sender)
     assert calls == []
@@ -103,7 +103,7 @@ def test_approving_needs_a_name(conn, name):
 
 def test_a_decision_is_final(conn):
     approval_id = new_draft(conn)
-    reject(conn, approval_id, "Eli Moss")
+    reject(conn, approval_id, "Eli Moss", "needs changes")
     with pytest.raises(ApprovalError):  # rejected can't be approved later
         approve(conn, approval_id, "Eli Moss")
     assert status(conn, approval_id) == "rejected"
@@ -155,7 +155,7 @@ def test_trigger_blocks_pending_to_sent(conn):
 
 def test_trigger_blocks_rejected_to_sent(conn):
     approval_id = new_draft(conn)
-    reject(conn, approval_id, "Eli Moss")
+    reject(conn, approval_id, "Eli Moss", "needs changes")
     with pytest.raises(sqlite3.IntegrityError):
         raw_set(conn, approval_id, "sent")
     assert status(conn, approval_id) == "rejected"

@@ -86,7 +86,7 @@ def run_approval_command(args: argparse.Namespace) -> int:
                 send_approved(conn, args.id, slack.slack_sender)
                 print(f"approval {args.id} sent")
         elif args.command == "reject":
-            reject(conn, args.id, args.by)
+            reject(conn, args.id, args.by, args.reason)
             print(f"approval {args.id} rejected by {args.by}")
         else:  # send
             send_approved(conn, args.id, slack.slack_sender)
@@ -120,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     for cmd in (approve_cmd, reject_cmd):
         cmd.add_argument("id", type=int)
         cmd.add_argument("--by", required=True, help="who is deciding, e.g. the manager's name")
+    reject_cmd.add_argument("--reason", required=True, help="why it is rejected (saved and posted to Slack)")
     approve_cmd.add_argument("--send", action="store_true", help="also send it to Slack right after approving")
     send = commands.add_parser("send", help="send an approved draft to Slack (or the console if no webhook)")
     send.add_argument("id", type=int)

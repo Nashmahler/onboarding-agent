@@ -77,14 +77,16 @@ def build_prompt(employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:
     task_names = "\n".join(f"- {t['task']}" for t in tasks) or "- (none listed)"
     return (
         "Write a short, warm first-week plan (under 150 words) for a new hire at Juniper Labs, "
-        "a fictional company. Address them by first name and sign off from their manager.\n"
+        "a fictional company. Address them by first name.\n"
         f"Name: {employee['name']}\nRole: {employee['title']}\n"
         f"Team: {employee['department']}\nLocation: {employee['location']}\n"
         f"Manager: {employee['manager_name']}\n"
         f"Things already scheduled this week:\n{task_names}\n\n"
         "Rules: do not write any dates, weekdays or numbers of days; the checklist "
         "with the real dates appears right below your message, so you can point to it "
-        "(for example, \"the checklist below\"). Do not invent meetings, names or tools."
+        "(for example, \"the checklist below\"). "
+        "Sign off with the manager's name only. Don't add job titles, meetings, tools, "
+        "or anything else not listed above."
     )
 
 

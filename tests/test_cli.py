@@ -79,7 +79,7 @@ def test_send_before_approval_is_refused_and_prints_nothing(tmp_path, monkeypatc
 def test_reject_then_send_is_refused(tmp_path, monkeypatch, capsys):
     db = loaded_db(tmp_path, monkeypatch)
     main(["draft", "cand_1001", "--db", str(db)])
-    main(["reject", "1", "--by", "Eli Moss", "--db", str(db)])
+    main(["reject", "1", "--by", "Eli Moss", "--reason", "needs changes", "--db", str(db)])
     capsys.readouterr()
     assert main(["send", "1", "--db", str(db)]) == 1
     assert "To:" not in capsys.readouterr().out
