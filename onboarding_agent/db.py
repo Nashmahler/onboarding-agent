@@ -23,3 +23,8 @@ def init_db(conn: sqlite3.Connection) -> None:
     if "reason" not in columns:
         with conn:
             conn.execute("ALTER TABLE approvals ADD COLUMN reason TEXT")
+    # Same for runs_log.alerted (added in Session 4 for the repeat-alert rule).
+    columns = [row["name"] for row in conn.execute("PRAGMA table_info(runs_log)")]
+    if "alerted" not in columns:
+        with conn:
+            conn.execute("ALTER TABLE runs_log ADD COLUMN alerted INTEGER NOT NULL DEFAULT 0")

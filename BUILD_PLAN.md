@@ -27,9 +27,12 @@
 - [x] Tests: overdue math, failure alert
 
 ## Session 4 (~1.5h): measure it and ship it
-- [ ] Metrics in SQL: days from offer accepted to all day-one tasks done, overdue tasks by owner
-- [ ] README with a diagram, the rules above, how to run it, and what I'd build next
-- [ ] Record what broke and how I fixed it (for Friday's post)
+- [x] Repeat alerts: an event file alerts only the first time it fails; later failures are logged as "already alerted"
+- [x] Metrics in SQL: days from offer accepted to all day-one tasks done, overdue tasks by owner
+- [x] `complete` command and a "Complete task" button (sets completed_date in code, logs it, posts to Slack)
+- [x] Dashboard: one static page (`docs/index.html`) built from the demo database, rebuilt and committed by every button
+- [x] README with a diagram, the rules and how they're enforced, the buttons, known gaps
+- [x] Record what broke and how I fixed it (README, "What broke and how I fixed it")
 
 ## Known gaps
 - **Changed start dates are ignored.** If an "offer accepted" event is replayed for the same candidate with a different start date, the existing employee row and task due dates are kept as they were (the inserts use `ON CONFLICT DO NOTHING`). A changed start date needs its own handling, such as updating the employee and recomputing the due dates of tasks that aren't done yet. Not built yet.

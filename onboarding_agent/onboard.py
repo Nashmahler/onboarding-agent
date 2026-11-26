@@ -61,20 +61,40 @@ def create_tasks(conn: sqlite3.Connection, employee_id: int, hire: NewHire) -> i
     return created
 
 
+EVENT_STEP_PREFIX = "onboard "  # steps named "onboard <event file name>"
+
+
+def _already_alerted(conn: sqlite3.Connection, step: str) -> bool:
+    """True if an earlier failure of this same step was really posted to Slack."""
+    return conn.execute(
+        "SELECT 1 FROM runs_log WHERE step = ? AND status = 'failed' AND alerted = 1 LIMIT 1", (step,)
+    ).fetchone() is not None
+
+
 def log_run(conn: sqlite3.Connection, step: str, status: str, detail: str) -> None:
     """Write one row to runs_log (ran_at is set here in code, in UTC).
 
     A 'failed' row also raises a Slack alert. It lives here, not at each call site, so no
     failed step can be logged without alerting. The row is written first: even if the
-    alert can't be delivered, the failure is on record."""
+    alert can't be delivered, the failure is on record.
+
+    Repeat rule: a given event file alerts only the first time it fails. A later failure of
+    the same file is still logged (as 'failed', detail starting 'already alerted') but posts
+    nothing. If the first alert never reached Slack, the next failure alerts again."""
     ran_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    repeat = status == "failed" and step.startswith(EVENT_STEP_PREFIX) and _already_alerted(conn, step)
+    if repeat:
+        detail = f"already alerted: {detail}"
     with conn:
-        conn.execute(
-            "INSERT INTO runs_log (ran_at, step, status, detail) VALUES (?, ?, ?, ?)",
-            (ran_at, step, status, detail),
+        cursor = conn.execute(
+            "INSERT INTO runs_log (ran_at, step, status, detail, alerted) VALUES (?, ?, ?, ?, ?)",
+            (ran_at, step, status, detail, int(repeat)),
         )
-    if status == "failed":
-        slack.alert(conn, step, detail)
+    if status == "failed" and not repeat:
+        # Only a real Slack post counts as "alerted"; a console print does not silence later alerts.
+        if slack.alert(conn, step, detail) and slack.is_configured():
+            with conn:
+                conn.execute("UPDATE runs_log SET alerted = 1 WHERE id = ?", (cursor.lastrowid,))
 
 
 def _describe(hire: NewHire, created: int) -> str:

@@ -1,0 +1,78 @@
+name: Complete task
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: "Candidate id of the new hire, e.g. cand_1001"
+        required: true
+      task:
+        description: "Exact task name, e.g. Add to payroll"
+        required: true
+      completed_by:
+        description: "Your name, recorded as the person who finished it"
+        required: true
+
+# Write access is only needed to commit the demo database.
+permissions:
+  contents: write
+
+# One button at a time, so two runs can never overwrite each other's database.
+concurrency:
+  group: demo-database
+  cancel-in-progress: false
+
+env:
+  DB: data/demo/onboarding_demo.db
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the latest main, not the commit that was main when the button was clicked:
+      # a queued run must see the database the previous run just saved.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      # Inputs go in through environment variables, never pasted into the command text,
+      # so a crafted name can't run commands.
+      - name: Mark the task done
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          TASK: ${{ inputs.task }}
+          COMPLETED_BY: ${{ inputs.completed_by }}
+          ONBOARDING_SLACK_WEBHOOK: ${{ secrets.ONBOARDING_SLACK_WEBHOOK }}
+        run: |
+          if ! [[ "$CANDIDATE_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "candidate id has odd characters"; exit 1; fi
+          python -m onboarding_agent complete "$CANDIDATE_ID" --task "$TASK" --by "$COMPLETED_BY" --db "$DB"
+
+      # Rebuild the dashboard page from the database. Read-only: no API key is passed here.
+      # `if: always()` so the page reflects the database even after a failed step.
+      - name: Rebuild the dashboard
+        if: always()
+        env:
+          ONBOARDING_SLACK_WEBHOOK: ${{ secrets.ONBOARDING_SLACK_WEBHOOK }}
+        run: python -m onboarding_agent dashboard --db "$DB" --out docs/index.html
+
+      # Save the database back to the repo so the next button sees the same data.
+      # `if: always()` so a failed run's log rows and approvals are kept too.
+      - name: Save the demo database
+        if: always()
+        env:
+          COMMIT_MESSAGE: "demo db: complete ${{ inputs.candidate_id }}"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898583+github-actions[bot]@users.noreply.github.com"
+          git add data/demo/onboarding_demo.db docs/index.html
+          if git diff --cached --quiet; then echo "database unchanged"; exit 0; fi
+          git commit -m "$COMMIT_MESSAGE"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 3
+          done
+          echo "could not push the database"; exit 1

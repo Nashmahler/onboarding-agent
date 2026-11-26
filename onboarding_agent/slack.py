@@ -20,6 +20,11 @@ class SlackError(Exception):
     """A message could not be delivered. The text never contains the webhook URL."""
 
 
+def is_configured() -> bool:
+    """True when a webhook is set, i.e. messages really go to Slack and not the console."""
+    return bool(os.environ.get(WEBHOOK_VAR, "").strip())
+
+
 def escape(text: str) -> str:
     """Slack treats & < > as markup, so escape them in anything we did not write."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

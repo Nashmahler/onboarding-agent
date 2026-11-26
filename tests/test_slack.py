@@ -262,3 +262,62 @@ def test_run_onboarding_redrafts_a_rejected_hire_within_the_cap(tmp_path, slack_
     assert fake.calls == 3
     assert connect(str(db)).execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 3
     assert any("used all 3 Claude calls" in m and "Step failed" in m for m in slack_on.sent)
+
+
+# --- Session 4: alert only the first time a given event file fails ---
+
+BAD = SAMPLES / "cand_1005_missing_start_date.json"
+
+
+def bad_rows(conn):
+    return conn.execute(
+        "SELECT status, detail, alerted FROM runs_log WHERE step = ? ORDER BY id", (f"onboard {BAD.name}",)
+    ).fetchall()
+
+
+def test_the_same_bad_file_alerts_once_then_logs_already_alerted(slack_on, tmp_path):
+    conn = connect(str(tmp_path / "t.db"))
+    init_db(conn)
+    process_event(conn, BAD)
+    process_event(conn, BAD)
+    process_event(conn, BAD)
+    assert len(slack_on.sent) == 1  # one post to Slack, not three
+    first, second, third = bad_rows(conn)
+    assert first["status"] == "failed" and first["alerted"] == 1
+    for repeat in (second, third):  # still logged as failures, but quiet
+        assert repeat["status"] == "failed"
+        assert repeat["detail"].startswith("already alerted: ")
+        assert "missing field" in repeat["detail"]
+
+
+def test_a_different_bad_file_still_alerts(slack_on, tmp_path):
+    other = tmp_path / "cand_9999_broken.json"
+    other.write_text("{not json")
+    conn = connect(str(tmp_path / "t.db"))
+    init_db(conn)
+    process_event(conn, BAD)
+    process_event(conn, other)
+    assert len(slack_on.sent) == 2
+
+
+def test_a_first_alert_that_never_reached_slack_is_retried(monkeypatch, tmp_path):
+    conn = connect(str(tmp_path / "t.db"))
+    init_db(conn)
+    monkeypatch.setenv(slack.WEBHOOK_VAR, FAKE_URL)
+    monkeypatch.setattr(slack.requests, "post", Recorder(status=500))  # Slack is down
+    process_event(conn, BAD)
+    assert bad_rows(conn)[0]["alerted"] == 0
+    recorder = Recorder()
+    monkeypatch.setattr(slack.requests, "post", recorder)  # Slack is back
+    process_event(conn, BAD)
+    assert len(recorder.sent) == 1  # alerted this time, because the first one never arrived
+    process_event(conn, BAD)
+    assert len(recorder.sent) == 1  # and now it stays quiet
+
+
+def test_without_a_webhook_a_console_print_does_not_count_as_alerted(tmp_path, capsys):
+    conn = connect(str(tmp_path / "t.db"))
+    init_db(conn)
+    process_event(conn, BAD)
+    assert bad_rows(conn)[0]["alerted"] == 0
+    assert "Step failed" in capsys.readouterr().err

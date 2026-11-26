@@ -2,9 +2,10 @@
 import argparse
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 
-from . import overdue, slack
+from . import dashboard, metrics, overdue, slack
 from .approvals import (
     ApprovalError,
     approve,
@@ -15,6 +16,7 @@ from .approvals import (
 from .db import connect, init_db
 from .onboard import log_run, process_event
 from .plan import PlanError, draft_plan
+from .tasks import TaskError, complete_task
 
 
 def _process_folder(conn, folder: Path) -> list:
@@ -108,6 +110,38 @@ def run_overdue_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_complete_command(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    init_db(conn)
+    try:
+        day = complete_task(conn, args.candidate_id, args.task, args.by)
+    except TaskError as exc:  # already logged (and alerted) by complete_task
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"{args.task!r} for {args.candidate_id} completed on {day} by {args.by}")
+    return 0
+
+
+def run_metrics_command(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    init_db(conn)
+    print(metrics.build_metrics(conn, args.today or date.today().isoformat()))
+    return 0
+
+
+def run_dashboard_command(args: argparse.Namespace) -> int:
+    """Read-only: builds the page from the database. A failure is logged (and alerted)."""
+    conn = connect(args.db)
+    init_db(conn)
+    try:
+        path = dashboard.write_dashboard(conn, args.out, args.today)
+    except Exception as exc:
+        log_run(conn, "dashboard", "failed", f"{type(exc).__name__}: {exc}")
+        return 1
+    print(f"wrote {path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="onboarding_agent")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -129,13 +163,28 @@ def main(argv: list[str] | None = None) -> int:
     report = commands.add_parser("overdue", help="report open tasks past their due date, grouped by owner")
     report.add_argument("--post", action="store_true", help="also post the report to Slack")
     report.add_argument("--today", help="pretend today is this YYYY-MM-DD (for demos and tests)")
-    for cmd in (load, draft, approve_cmd, reject_cmd, send, run, report):
+    complete = commands.add_parser("complete", help="mark one onboarding task done (date is set by the code)")
+    complete.add_argument("candidate_id")
+    complete.add_argument("--task", required=True, help="the exact task name, e.g. 'Add to payroll'")
+    complete.add_argument("--by", required=True, help="who finished it (logged and posted to Slack)")
+    metrics_cmd = commands.add_parser("metrics", help="print days-to-day-one-done and overdue tasks by owner")
+    metrics_cmd.add_argument("--today", help="pretend today is this YYYY-MM-DD")
+    page = commands.add_parser("dashboard", help="write the static dashboard page from the database")
+    page.add_argument("--out", default="docs/index.html", help="where to write it (default: docs/index.html)")
+    page.add_argument("--today", help="pretend today is this YYYY-MM-DD")
+    for cmd in (load, draft, approve_cmd, reject_cmd, send, run, report, complete, metrics_cmd, page):
         cmd.add_argument("--db", default="onboarding.db", help="SQLite file (default: onboarding.db)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.WARNING, format="warning: %(message)s")
     if args.command == "overdue":
         return run_overdue_command(args)
+    if args.command == "complete":
+        return run_complete_command(args)
+    if args.command == "metrics":
+        return run_metrics_command(args)
+    if args.command == "dashboard":
+        return run_dashboard_command(args)
     if args.command not in ("load", "run"):
         return run_approval_command(args)
     if not args.folder.is_dir():

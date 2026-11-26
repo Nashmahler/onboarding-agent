@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS runs_log (
   ran_at TEXT NOT NULL,
   step TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('ok', 'failed', 'skipped')),
-  detail TEXT
+  detail TEXT,
+  alerted INTEGER NOT NULL DEFAULT 0   -- 1 once a failure was actually posted to Slack
 );
 
 -- Database-level guard. Even a direct edit with the sqlite3 tool can't skip approval.

@@ -37,6 +37,14 @@ jobs:
           ONBOARDING_SLACK_WEBHOOK: ${{ secrets.ONBOARDING_SLACK_WEBHOOK }}
         run: python -m onboarding_agent run data/sample_events --db "$DB"
 
+      # Rebuild the dashboard page from the database. Read-only: no API key is passed here.
+      # `if: always()` so the page reflects the database even after a failed step.
+      - name: Rebuild the dashboard
+        if: always()
+        env:
+          ONBOARDING_SLACK_WEBHOOK: ${{ secrets.ONBOARDING_SLACK_WEBHOOK }}
+        run: python -m onboarding_agent dashboard --db "$DB" --out docs/index.html
+
       # Save the database back to the repo so the next button sees the same data.
       # `if: always()` so a failed run's log rows and approvals are kept too.
       - name: Save the demo database
@@ -46,7 +54,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898583+github-actions[bot]@users.noreply.github.com"
-          git add data/demo/onboarding_demo.db
+          git add data/demo/onboarding_demo.db docs/index.html
           if git diff --cached --quiet; then echo "database unchanged"; exit 0; fi
           git commit -m "$COMMIT_MESSAGE"
           for attempt in 1 2 3; do
