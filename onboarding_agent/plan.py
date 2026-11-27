@@ -5,10 +5,11 @@ and the dated checklist is appended by code, never written by the model.
 """
 import os
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from . import slack
 from .approvals import create_draft
+from .checklist import WINDOW_DAYS, build_checklist, first_week_tasks  # noqa: F401 (re-exported)
 from .onboard import log_run
 
 KIND = "first_week_plan"
@@ -16,7 +17,6 @@ MODEL = "claude-haiku-5-5"
 KEY_VAR = "ONBOARDING_API_KEY"  # not ANTHROPIC_API_KEY; passed to the client explicitly
 MAX_TOKENS = 2000  # room for the whole reply; a cut-off reply is treated as a failure
 MAX_CALLS_PER_HIRE = 3  # CLAUDE.md rule: at most 3 Claude calls per new hire
-WINDOW_DAYS = 14  # how far past day one the checklist reaches
 SAMPLE_LABEL = f"[SAMPLE PLAN: {KEY_VAR} is not set, so Claude was not called]"
 
 
@@ -49,28 +49,6 @@ def _make_client(api_key: str):
     import anthropic  # imported here so tests and the sample path work without it
 
     return anthropic.Anthropic(api_key=api_key)
-
-
-def first_week_tasks(conn: sqlite3.Connection, employee: sqlite3.Row) -> list[sqlite3.Row]:
-    """Tasks due from day one through the first two weeks. Dates are computed here, in code.
-
-    Two weeks, not one: the template's own tasks (security training, benefits) fall
-    in week two, and everything before day one is set up before the hire arrives."""
-    start = date.fromisoformat(employee["start_date"])
-    return conn.execute(
-        """SELECT task, owner_role, due_date FROM onboarding_tasks
-           WHERE employee_id = ? AND due_date BETWEEN ? AND ?
-           ORDER BY due_date, task""",
-        (employee["id"], start.isoformat(), (start + timedelta(days=WINDOW_DAYS - 1)).isoformat()),
-    ).fetchall()
-
-
-def build_checklist(tasks: list[sqlite3.Row]) -> str:
-    if not tasks:
-        return "Your checklist: no dated tasks fall in your first two weeks."
-    lines = ["Your checklist for the first two weeks:"]
-    lines += [f"- {t['due_date']}: {t['task']} ({t['owner_role']})" for t in tasks]
-    return "\n".join(lines)
 
 
 def build_prompt(employee: sqlite3.Row, tasks: list[sqlite3.Row]) -> str:

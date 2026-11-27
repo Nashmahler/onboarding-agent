@@ -70,7 +70,8 @@ def pending_message(approval_id: int, employee: sqlite3.Row, draft: str) -> str:
     return (
         f":hourglass_flowing_sand: *Plan pending approval #{approval_id}* for "
         f"{escape(employee['name'])} ({escape(employee['title'])}), manager {escape(employee['manager_name'])}.\n"
-        f"Nothing has been sent to the new hire. To release it, run the *Approve* workflow "
+        f"Nothing has been sent to the new hire. The checklist at the bottom is a preview: when the plan "
+        f"is sent, its dates are re-read from the database, so the welcome always shows current dates. To release it, run the *Approve* workflow "
         f"with approval id *{approval_id}* and your name; to turn it down, run *Reject* with a reason.\n"
         f"--- DRAFT ---\n{escape(draft)}"
     )

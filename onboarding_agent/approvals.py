@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 
 from . import slack
+from .checklist import refresh_draft
 from .onboard import log_run
 
 
@@ -21,7 +22,7 @@ class NotApprovedError(ApprovalError):
     """Someone tried to send a draft that is not approved."""
 
 
-# A sender takes (the approvals row, the employee row) and delivers the draft.
+# A sender takes (the approval as a dict-like row, the employee row) and delivers the draft.
 Sender = Callable[[sqlite3.Row, sqlite3.Row], None]
 
 
@@ -102,8 +103,13 @@ def send_approved(conn: sqlite3.Connection, approval_id: int, sender: Sender) ->
     # Only now, with the row already marked sent, does any delivery code run.
     row = get_approval(conn, approval_id)
     employee = conn.execute("SELECT * FROM employees WHERE id = ?", (row["employee_id"],)).fetchone()
+    refreshed = False
     try:
-        sender(row, employee)
+        # The checklist is rebuilt from the database NOW, so an approved plan shows current dates.
+        # The approved prose is kept word for word, and the stored draft is not edited.
+        fresh = refresh_draft(conn, row["draft"], employee)
+        refreshed = fresh != row["draft"]
+        sender(dict(row) | {"draft": fresh}, employee)
     except Exception as exc:
         with conn:  # delivery failed: put it back so a person can retry
             conn.execute(
@@ -112,7 +118,8 @@ def send_approved(conn: sqlite3.Connection, approval_id: int, sender: Sender) ->
             )
         log_run(conn, step, "failed", f"delivery failed, still approved: {exc}")
         raise
-    log_run(conn, step, "ok", f"sent to {employee['name']} and {employee['manager_name']}")
+    note = "; checklist dates refreshed from the database" if refreshed else ""
+    log_run(conn, step, "ok", f"sent to {employee['name']} and {employee['manager_name']}{note}")
 
 
 def console_sender(approval: sqlite3.Row, employee: sqlite3.Row) -> None:

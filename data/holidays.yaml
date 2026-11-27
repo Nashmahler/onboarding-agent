@@ -1,0 +1,7 @@
+# Juniper Labs company holidays (fictional). Nobody works these days, so no task is due on them:
+# a due date that lands on one moves to the previous working day (skipping weekends and holidays).
+# Dates are YYYY-MM-DD. Add a line to add a holiday; the next "Run onboarding" reschedules open tasks.
+- {date: 2026-12-24, name: Christmas Eve}
+- {date: 2026-12-25, name: Christmas Day}
+- {date: 2026-12-31, name: New Year's Eve}
+- {date: 2027-01-01, name: New Year's Day}

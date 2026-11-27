@@ -34,5 +34,10 @@
 - [x] README with a diagram, the rules and how they're enforced, the buttons, known gaps
 - [x] Record what broke and how I fixed it (README, "What broke and how I fixed it")
 
+## Session 5 (follow-up): company holidays
+- [x] `data/holidays.yaml`; a due date on a holiday moves to the previous working day (weekend rules otherwise unchanged)
+- [x] "Run onboarding" reschedules open tasks, logs old and new dates, posts one Slack summary only when something changed; completed tasks never change
+- [x] The welcome checklist is rebuilt from the database when the plan is sent (the pending message says so)
+
 ## Known gaps
 - **Changed start dates are ignored.** If an "offer accepted" event is replayed for the same candidate with a different start date, the existing employee row and task due dates are kept as they were (the inserts use `ON CONFLICT DO NOTHING`). A changed start date needs its own handling, such as updating the employee and recomputing the due dates of tasks that aren't done yet. Not built yet.

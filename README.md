@@ -17,7 +17,7 @@ Nothing reaches the new hire until a person approves. A rejected draft is saved 
 | Rule | Where it is enforced |
 |---|---|
 | **A person approves anything sent to a person.** | `send_approved` flips `approved -> sent` in one SQL statement that only matches an approved row. A database trigger refuses any other route to `sent`, even a hand edit with the `sqlite3` tool. |
-| **Dates, counts and "overdue" come from code, never the model.** | Due dates are computed in Python; overdue, day-one and per-owner counts are SQL in [queries/](queries/). The model only writes the plan text. |
+| **Dates, counts and "overdue" come from code, never the model.** | Due dates are computed in Python (weekends and the company holidays in [data/holidays.yaml](data/holidays.yaml) are skipped); overdue, day-one and per-owner counts are SQL in [queries/](queries/). The model only writes the plan text. |
 | **Every run is logged.** | `log_run` writes a `runs_log` row for each step before anything else happens. |
 | **A failed step alerts someone.** | `log_run` raises the Slack alert for every `failed` row, so no failure can be logged without one. If the alert can't be delivered, a failed `slack alert` row is written. A given bad event file alerts only the first time; later failures are logged as `already alerted` and post nothing. |
 | **At most 3 Claude calls per new hire.** | Each call reserves a `runs_log` row in one SQL statement that inserts only while fewer than 3 exist. A 4th is refused before any request is made. |
@@ -73,7 +73,7 @@ Set `ONBOARDING_SLACK_WEBHOOK` (an incoming-webhook URL) in your shell or a loca
 
 Add two repo secrets (Settings > Secrets and variables > Actions): `ONBOARDING_API_KEY` and `ONBOARDING_SLACK_WEBHOOK`. Then, under the Actions tab:
 
-1. **Run onboarding**: loads `data/sample_events` and drafts a plan per hire (each posts "pending approval" to Slack). `cand_1005` is the planted failure: it is missing a start date, so it logs a failed row and posts an alert the first time. The run is green when every failure was logged and alerted; it goes red only for something unexpected (a crash, or an alert that could not be delivered).
+1. **Run onboarding**: loads `data/sample_events` and drafts a plan per hire (each posts "pending approval" to Slack). `cand_1005` is the planted failure: it is missing a start date, so it logs a failed row and posts an alert the first time. It also **reschedules open tasks**: due dates are recomputed with the current rules (including holidays), completed tasks are never changed, each change is logged in `runs_log` with the old and new date, and one Slack summary is posted when anything moved (nothing is posted when nothing changed). A hire who already has a plan waiting or sent is not drafted again, so no new Claude call is made. The run is green when every failure was logged and alerted; it goes red only for something unexpected (a crash, or an alert that could not be delivered).
 2. **Approve**: inputs are the approval id (from the Slack message) and your name. It approves and sends the welcome to Slack.
 3. **Reject**: inputs are the approval id, your name and a reason. It rejects a pending draft, saves the reason, and posts it to Slack. The next **Run onboarding** drafts a fresh plan for that hire (still within the 3-call cap).
 4. **Overdue report**: posts the report to Slack.
@@ -87,13 +87,15 @@ Every button then rebuilds `docs/index.html` and commits it together with the da
 
 ## Known gaps
 
-- **Holidays.** Due dates skip weekends but not public holidays, so a task can land on a day nobody is working.
+- **Holidays are a hand-kept list.** `data/holidays.yaml` has only the Juniper Labs closures (Dec 24-25, Dec 31-Jan 1 for now); add a line for any other day. A task due on a holiday moves to the previous working day, which can be earlier than the nominal date.
 - **Changed start dates are ignored.** If an offer-accepted event is replayed with a different start date, the existing employee and task due dates are kept (the inserts use `ON CONFLICT DO NOTHING`). It needs its own handling: update the employee and recompute due dates for tasks not yet done.
 - **Retrying a failed send is manual.** If an approved plan fails to send (for example Slack is down), it goes back to `approved`; someone has to run `python -m onboarding_agent send <id>` against the pulled database.
 - **The approver name is typed.** Whoever clicks Approve, Reject or Complete types their own name, so the real control is who has write access to the repo.
 - **Task completion is by exact name.** A typo is refused (and the valid names are listed), but there is no picker.
 
 ## What broke and how I fixed it
+
+- **A task was due on Christmas Eve.** Priya's benefits enrollment landed on Dec 24 because only weekends were skipped. Due dates now also skip company holidays (previous working day), "Run onboarding" moves already-created open tasks, and the welcome checklist is rebuilt from the database when the plan is sent, so an approved plan can't show a stale date.
 
 - **A reply cut off mid-plan was treated as fine.** Claude hit `max_tokens` and the half-written draft was saved as pending. Now a reply that stops at the limit is logged as failed, no approval row is saved, and `max_tokens` is higher.
 - **A rejected draft blocked any new one.** After a rejection `draft` refused to make another. A new draft is now allowed after a rejection, with the 3-calls-per-hire cap counted in SQL so failed calls still use a slot.

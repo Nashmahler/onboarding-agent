@@ -6,6 +6,7 @@ from pathlib import Path
 
 from . import slack
 from .events import EventError, NewHire, parse_event
+from .holidays import HolidayError, load_holidays
 from .templates import TemplateError, has_department, tasks_for
 
 
@@ -17,16 +18,23 @@ class Result:
     tasks_created: int = 0
 
 
-def due_date(start_date: str, offset_days: int) -> str:
-    """Start date + offset, kept off weekends (Monday is 0, Saturday 5, Sunday 6).
-    Before day one (negative offset): back to the previous Friday, so it still
-    happens before the hire starts. Otherwise: forward to the next Monday."""
+def due_date(start_date: str, offset_days: int, holidays: frozenset[str] = frozenset()) -> str:
+    """Start date + offset, kept off weekends and company holidays.
+
+    Weekends (Monday is 0, Saturday 5, Sunday 6): before day one (negative offset) back to the
+    previous Friday, so it still happens before the hire starts; otherwise forward to the next
+    Monday. Then, if that day is a company holiday, step back one day at a time to the previous
+    working day (skipping weekends and holidays). That can be earlier than the nominal date,
+    which is the safe direction for a deadline."""
     day = date.fromisoformat(start_date) + timedelta(days=offset_days)
     if day.weekday() >= 5:
         if offset_days < 0:
             day -= timedelta(days=day.weekday() - 4)  # Saturday -1, Sunday -2
         else:
             day += timedelta(days=7 - day.weekday())  # Saturday +2, Sunday +1
+    if day.isoformat() in holidays:
+        while day.weekday() >= 5 or day.isoformat() in holidays:
+            day -= timedelta(days=1)
     return day.isoformat()
 
 
@@ -47,7 +55,7 @@ def add_employee(conn: sqlite3.Connection, hire: NewHire) -> int:
     return row["id"]
 
 
-def create_tasks(conn: sqlite3.Connection, employee_id: int, hire: NewHire) -> int:
+def create_tasks(conn: sqlite3.Connection, employee_id: int, hire: NewHire, holidays: frozenset[str] = frozenset()) -> int:
     """Insert each template task (existing ones are skipped). Return how many were new."""
     created = 0
     for t in tasks_for(hire.department):
@@ -55,7 +63,7 @@ def create_tasks(conn: sqlite3.Connection, employee_id: int, hire: NewHire) -> i
             """INSERT INTO onboarding_tasks (employee_id, task, owner_role, due_date)
                VALUES (?, ?, ?, ?)
                ON CONFLICT(employee_id, task) DO NOTHING""",
-            (employee_id, t.task, t.owner_role, due_date(hire.start_date, t.offset_days)),
+            (employee_id, t.task, t.owner_role, due_date(hire.start_date, t.offset_days, holidays)),
         )
         created += cursor.rowcount  # 1 if inserted, 0 if it already existed
     return created
@@ -109,10 +117,11 @@ def process_event(conn: sqlite3.Connection, path: str | Path) -> Result:
     step = f"onboard {Path(path).name}"
     try:
         hire = parse_event(path)
+        holidays = load_holidays()
         with conn:  # one transaction: all of it is saved, or none of it
             employee_id = add_employee(conn, hire)
-            created = create_tasks(conn, employee_id, hire)
-    except (EventError, TemplateError, sqlite3.Error) as exc:
+            created = create_tasks(conn, employee_id, hire, holidays)
+    except (EventError, TemplateError, HolidayError, sqlite3.Error) as exc:
         log_run(conn, step, "failed", str(exc))
         return Result("failed", str(exc))
     status = "ok" if created else "skipped"

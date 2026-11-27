@@ -5,7 +5,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import dashboard, metrics, overdue, slack
+from . import dashboard, metrics, overdue, schedule, slack
 from .approvals import (
     ApprovalError,
     approve,
@@ -47,6 +47,8 @@ def run_onboarding(folder: Path, db_path: str) -> int:
     last_row = conn.execute("SELECT COALESCE(MAX(id), 0) FROM runs_log").fetchone()[0]
     try:
         results = _process_folder(conn, folder)
+        moved = schedule.reschedule_open_tasks(conn)  # open tasks only; each change logged, one Slack summary
+        print(f"rescheduled {len(moved)} open task(s)")
         for result in results:
             if result.employee_id is None:
                 continue  # that event failed; its failure is already logged and alerted
