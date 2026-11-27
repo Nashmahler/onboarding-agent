@@ -9,14 +9,14 @@ When a new hire accepts their offer, this agent starts onboarding right away: it
 ## How it flows
 
 ```mermaid
-flowchart LR
-    A[Offer accepted<br/>event file] --> B[Checklist<br/>owners + due dates<br/>computed in code]
-    B --> C[AI draft<br/>one Claude call<br/>saved as pending]
-    C --> D{A person<br/>decides}
-    D -- approve --> E[Slack welcome<br/>with the approved plan]
-    D -- reject + reason --> C
-    B -. any failed step .-> F[Slack alert<br/>+ runs_log row]
-    B -. open and past due .-> G[Overdue report]
+flowchart TD
+    A["Offer accepted"] --> B["Checklist built<br/>(dates in code)"]
+    B --> C["AI drafts welcome<br/>(saved as pending)"]
+    C --> D{"Person<br/>reviews"}
+    D -- approve --> E["Welcome sent<br/>to Slack"]
+    D -- reject --> C
+    B -. failure .-> F["Slack alert<br/>+ run log"]
+    B -. past due .-> G["Overdue report"]
 ```
 
 Nothing reaches the new hire until a person approves. A rejected draft is saved with its reason and the next run drafts a fresh one.
