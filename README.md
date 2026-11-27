@@ -8,16 +8,7 @@ When a new hire accepts their offer, this agent starts onboarding right away: it
 
 ## How it flows
 
-```mermaid
-flowchart TD
-    A["Offer accepted"] --> B["Checklist built<br/>(dates in code)"]
-    B --> C["AI drafts welcome<br/>(saved as pending)"]
-    C --> D{"Person<br/>reviews"}
-    D -- approve --> E["Welcome sent<br/>to Slack"]
-    D -- reject --> C
-    B -. failure .-> F["Slack alert<br/>+ run log"]
-    B -. past due .-> G["Overdue report"]
-```
+![How it flows: offer accepted, checklist built in code, AI drafts a welcome saved as pending, a person approves or rejects, welcome sent to Slack; failures alert, overdue tasks are reported, and the dashboard updates every run](docs/flow.png)
 
 Nothing reaches the new hire until a person approves. A rejected draft is saved with its reason and the next run drafts a fresh one.
 
